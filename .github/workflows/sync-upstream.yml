@@ -1,0 +1,82 @@
+name: Sync any branch from upstream
+
+on:
+  workflow_call:
+    inputs:
+      upstream_repo:
+        description: "Remote GitHub repository URL"
+        required: true
+        type: string
+      upstream_branch:
+        description: "Branch name in the remote repository"
+        required: true
+        type: string
+      local_branch:
+        description: "The name of the local branch in your repository"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      upstream_repo:
+        description: "Remote GitHub repository URL"
+        required: true
+        type: string
+      upstream_branch:
+        description: "Branch name in the remote repository"
+        required: true
+        type: string
+      local_branch:
+        description: "The name of the local branch in your repository"
+        required: true
+        type: string
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Add GitHub remote and fetch upstream branch
+        run: |
+          git remote add upstream "${{ inputs.upstream_repo }}" || true
+          git fetch upstream "${{ inputs.upstream_branch }}"
+
+      - name: Check for updates and sync branch
+        run: |
+          set -e
+          new_commit=$(git rev-parse upstream/${{ inputs.upstream_branch }})
+          echo "Latest upstream commit: $new_commit"
+
+          if git show-ref --verify --quiet refs/heads/${{ inputs.local_branch }}; then
+              git checkout ${{ inputs.local_branch }}
+              current_commit=$(git rev-parse HEAD)
+          else
+              git checkout -b ${{ inputs.local_branch }} upstream/${{ inputs.upstream_branch }}
+              current_commit=""
+          fi
+
+          if [ "$current_commit" != "$new_commit" ]; then
+              echo "Updating ${{ inputs.local_branch }} branch..."
+              git reset --hard upstream/${{ inputs.upstream_branch }}
+              git rm --cached .github/workflows/*.yml 2>/dev/null || true
+              git add -A
+              git commit -m "Sync ${{ inputs.local_branch }} with upstream" || echo "No changes"
+              git push origin ${{ inputs.local_branch }} --force
+          else
+              echo "${{ inputs.local_branch }} is already up to date."
+          fi
+
+      - name: Clear older runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run list -L400 --json databaseId -q '.[].databaseId' | tail -n+5 | xargs -IID gh api "repos/$GITHUB_REPOSITORY/actions/runs/ID" -X DELETE || :

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  schedule:
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clear older runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run list -L400 --json databaseId -q '.[].databaseId' | tail -n+5 | xargs -IID gh api "repos/$GITHUB_REPOSITORY/actions/runs/ID" -X DELETE || :
+
+  run_gkiandroid1461:
+    permissions: write-all
+    needs: check
+    uses: ./.github/workflows/gki-android14-6.1.yml
+    secrets: inherit
+
+  run_gkiandroid1566:
+    permissions: write-all
+    needs: check
+    uses: ./.github/workflows/gki-android15-6.6.yml
+    secrets: inherit
+
+  run_gkiandroid13515:
+    permissions: write-all
+    needs: check
+    uses: ./.github/workflows/gki-android13-5.15.yml
+    secrets: inherit
+
+  run_gkiandroid12510:
+    permissions: write-all
+    needs: check
+    uses: ./.github/workflows/gki-android12-5.10.yml
+    secrets: inherit
+
+  run_gkiandroid13510:
+    permissions: write-all
+    needs: check
+    uses: ./.github/workflows/gki-android13-5.10.yml
+    secrets: inherit
+
+  run_gkiandroid14515:
+    permissions: write-all
+    needs: check
+    uses: ./.github/workflows/gki-android14-5.15.yml
+    secrets: inherit
